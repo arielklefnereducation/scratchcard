@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>כרטיס גירוד אינטראקטיבי - 16:9</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: radial-gradient(circle, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .card-container {
+            position: relative;
+            /* 16:9 Aspect Ratio */
+            width: 90vw;
+            max-width: 960px;
+            aspect-ratio: 16 / 9;
+            background: #222;
+            border-radius: 12px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .reveal-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* Displaying the real image pic0.png */
+            background-image: url('pic0.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 1;
+        }
+
+        #scratch-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="black" stroke-width="1"><circle cx="12" cy="12" r="10"/></svg>'), auto;
+            transition: opacity 0.8s ease-in-out;
+        }
+
+        .instruction {
+            margin-top: 15px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1rem;
+            pointer-events: none;
+        }
+
+        /* Sparkle animation */
+        @keyframes sparkle {
+            0% { transform: scale(0); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .sparkle {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10;
+            animation: sparkle 0.5s linear forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="flex flex-col items-center w-full px-4">
+        <h1 class="text-white text-2xl md:text-4xl font-bold mb-8">גרדו לחשיפת התמונה 🖼️</h1>
+        
+        <div class="card-container" id="container">
+            <!-- The real image hidden underneath -->
+            <div class="reveal-content"></div>
+
+            <!-- The scratch layer -->
+            <canvas id="scratch-canvas"></canvas>
+        </div>
+
+        <!-- External Controls -->
+        <div class="mt-8 flex flex-col items-center gap-4">
+            <button onclick="resetCard()" class="bg-indigo-600 text-white px-10 py-3 rounded-full font-bold hover:bg-indigo-500 transition-all shadow-xl active:scale-95 border-2 border-white/20">
+                🔄 גרד מחדש
+            </button>
+            <p class="instruction">השתמש בעכבר או באצבע כדי לגלות את התמונה המסתתרת</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('scratch-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const container = document.getElementById('container');
+        
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        const revealThreshold = 0.45; // Auto-reveal at 45% scratched
+
+        function init() {
+            // Resize canvas to match container
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // Desktop Mouse Events
+            canvas.addEventListener('mousedown', startDrawing);
+            window.addEventListener('mousemove', draw);
+            window.addEventListener('mouseup', stopDrawing);
+
+            // Mobile Touch Events
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                startDrawing({ 
+                    offsetX: touch.clientX - rect.left, 
+                    offsetY: touch.clientY - rect.top 
+                });
+            });
+            window.addEventListener('touchmove', (e) => {
+                if (!isDrawing) return;
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                draw({ 
+                    offsetX: touch.clientX - rect.left, 
+                    offsetY: touch.clientY - rect.top 
+                });
+            });
+            window.addEventListener('touchend', stopDrawing);
+        }
+
+        function resizeCanvas() {
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            drawCover();
+        }
+
+        function drawCover() {
+            // Metallic Silver Scratch Cover
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, '#bdc3c7');
+            gradient.addColorStop(0.5, '#ecf0f1');
+            gradient.addColorStop(1, '#95a5a6');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Instructional text on the scratch layer
+            ctx.font = `bold ${Math.max(20, canvas.width/30)}px system-ui`;
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('גרדו כאן לחשיפה', canvas.width / 2, canvas.height / 2);
+            
+            // Texture noise effect
+            for (let i = 0; i < 1200; i++) {
+                ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                ctx.beginPath();
+                ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+            createSparkle(e.offsetX, e.offsetY);
+        }
+
+        function stopDrawing() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            checkScratchedPercentage();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            // Destination-out makes the brush "erase" the canvas content
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.lineWidth = Math.max(35, canvas.width / 18); 
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function checkScratchedPercentage() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+            let transparentPixels = 0;
+
+            for (let i = 3; i < pixels.length; i += 4) {
+                if (pixels[i] === 0) transparentPixels++;
+            }
+
+            const percentage = transparentPixels / (pixels.length / 4);
+            
+            if (percentage > revealThreshold) {
+                canvas.style.opacity = '0';
+                setTimeout(() => {
+                    canvas.style.pointerEvents = 'none';
+                }, 800);
+            }
+        }
+
+        function createSparkle(x, y) {
+            const sparkle = document.createElement('div');
+            sparkle.className = 'sparkle';
+            const size = Math.random() * 15 + 10;
+            sparkle.style.width = `${size}px`;
+            sparkle.style.height = `${size}px`;
+            const rect = container.getBoundingClientRect();
+            sparkle.style.left = `${x - size/2}px`;
+            sparkle.style.top = `${y - size/2}px`;
+            container.appendChild(sparkle);
+            setTimeout(() => sparkle.remove(), 500);
+        }
+
+        function resetCard() {
+            canvas.style.pointerEvents = 'auto';
+            canvas.style.opacity = '1';
+            ctx.globalCompositeOperation = 'source-over';
+            drawCover();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
